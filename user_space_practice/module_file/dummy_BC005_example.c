@@ -38,12 +38,19 @@ static ssize_t dummy_write(struct file *file,
   return length;
 }
 
+static long dummy_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
+{ //此的 結構與 function 引數皆有修改
+  //ioctl  =>  unlocked_ioctl
+  printk("device ioctl\n"); 
+  return 0; 
+}
 
 struct file_operations dummy_fops = {
   .owner = THIS_MODULE,
   .open = dummy_open,
   .release = dummy_release,
   .read = dummy_read,
+  .unlocked_ioctl = dummy_ioctl,
   .write = dummy_write,
 };
 

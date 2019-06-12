@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <sys/ioctl.h>
 
 int main()
 {
@@ -11,6 +12,7 @@ int main()
 
 	fread(buf, sizeof(buf), 1, fp);
 	fwrite(buf, sizeof(buf), 1, fp);
+	ioctl(fp, 0, 1);
 	fclose(fp);
 	return 0;
 }
