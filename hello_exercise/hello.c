@@ -5,7 +5,9 @@
 static char *whom = "world";
 static int howmany = 1;
 module_param(howmany, int, S_IRUGO); //此就算沒給 write 權限 (S_IRUGO|S_IWUSR) 一樣可輸入值
+MODULE_PARM_DESC(howmany, "printed times");
 module_param(whom, charp, S_IRUGO);  //或是在 module_param_array(name,type,num,perm); 才限制比較嚴格呢 ?
+MODULE_PARM_DESC(whom, "who do u want to say hello");
 
 static int hello_init(void)
 {
@@ -24,6 +26,6 @@ static void hello_exit(void)
 module_init(hello_init);
 module_exit(hello_exit);
 
-MODULE_LICENSE("Dual BSD/GPL");
+MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Sam Tsai");
 MODULE_DESCRIPTION("Hello driver");
