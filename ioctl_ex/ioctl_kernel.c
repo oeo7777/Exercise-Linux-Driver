@@ -16,6 +16,7 @@ static int dev_minor;
 static int val = 77;
 struct cdev *dev_cdevp = NULL;
 
+//=========================================================================
 static int devEx_open(struct inode *inode, struct file *file)
 {
   printk("devEx_open \n");
