@@ -3,11 +3,12 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <unistd.h>
 #include "ex_device.h"
 
 int main()
 {
-	char buf[1];
+	int buf[1], len;
 	int fd,  ret=10;
 
 	printf("start open\n");
@@ -23,9 +24,19 @@ int main()
 
 	printf("open device\n");
 
-	read(fd, buf, sizeof(buf));
+	if(read(fd, buf, sizeof(buf)))
+    {printf("read failed\n");}
+  else
+  {
+    printf("\n read num = %d\n", buf[0]);
+  }
+
+  buf[0] = 37;
+  len = write(fd, buf, sizeof(buf));
+  printf("write finish \n");
 
    // set num to 10
+  printf("\n ioctl set to kernel = %d\n", ret);
    if (ioctl(fd, SETNUM, &ret)< 0)
    {
        printf("set num failed\n");

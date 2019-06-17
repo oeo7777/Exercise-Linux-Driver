@@ -18,12 +18,18 @@
 #include <linux/ioport.h>
 #include <linux/interrupt.h>
 #include <linux/platform_device.h>
+
+#include <linux/moduleparam.h>
 // #include <mach/hardware.h>
 //#include <plat/gpio-cfg.h>
 
 #include "ex_device.h"
 
-#define DeviceName  "hello"
+#define DeviceName  "ExDev"
+
+static char *whom = "world";
+module_param(whom, charp, S_IRUGO);  //或是在 module_param_array(name,type,num,perm); 才限制比較嚴格呢 ?
+MODULE_PARM_DESC(whom, "who do u want to say hello");
 
 static int dev_major;
 static int dev_minor;
@@ -45,14 +51,34 @@ static int devEx_release(struct inode *inode, struct file *file)
 
 static ssize_t devEx_read(struct file *file, char *buffer, size_t length, loff_t * offset)
 {
+  int tv  = 987;
+
   printk("devEx_read \n");
+
+  if(copy_to_user((int __user *)buffer, &tv, length))
+  {
+    printk("devEx_read fault \n");
+    return -1;
+  }
   return 0;
 }
 
 
 static ssize_t devEx_write(struct file *file, const char *buffer, size_t length, loff_t * offset)
 {
+  int tv  = 0;
+
   printk("devEx_write \n");
+
+  if(copy_from_user(&tv,(int __user *)buffer,1))
+  {
+    printk("devEx_write fault \n");
+    return -1;
+  }
+  else
+  {
+    printk("get user set is %d \n", tv);
+  }
   return length;
 }
 
@@ -62,7 +88,8 @@ static long devEx_ioctl(struct file *filp, unsigned int cmd, unsigned long args)
   int tmp = 20;
   int err=0;
 
-  printk("ioctl rx cmd = %d\n", cmd); 
+  //printk("ioctl rx cmd = %d\n", cmd); 
+  printk("\n enter ioctl\n");
 
   if(_IOC_TYPE(cmd) != IOC_MAGIC)
     err = 0x1;
@@ -92,7 +119,7 @@ static long devEx_ioctl(struct file *filp, unsigned int cmd, unsigned long args)
       //copy data from val to args
       val = val * 5;
       if(copy_to_user((int __user *)args,&val,1))
-      return -1;
+        return -1;
 
       printk("%s():set val to %d\n",__FUNCTION__, val);
       break;
@@ -159,11 +186,44 @@ struct file_operations devEx_fops = {
   .write = devEx_write,
 };
 
+static int add_chac_device(struct platform_device *pdev)
+{
+  int ret = 0;
+  dev_t dev;
+  struct my_struct *my;
+
+  my = kmalloc(sizeof(*my), GFP_KERNEL);
+  if (!my)
+  {
+      printk("kmalloc failed\n");
+      return -ENOMEM;
+  }
+  platform_set_drvdata(pdev, my);
+  my->pdev = pdev;
+
+  ret = alloc_chrdev_region(&dev, 0, 1, DeviceName);
+  if(ret < 0)
+  {
+      printk("can't alloc chrdev\n");
+      return ret;
+  }
+  dev_major = MAJOR(dev);
+  dev_minor = MINOR(dev);
+  printk("register chrdev(%d,%d)\n",dev_major,dev_minor);
+
+  //my->mdev.name   = DeviceName;
+  //my->mdev.fops   = &devEx_fops;
+  cdev_init(&my->mdev, &devEx_fops);
+  my->mdev.owner = THIS_MODULE;
+  ret = cdev_add(&my->mdev, MKDEV(dev_major, dev_minor),1);
+
+  return ret;
+}
+
 static int  hello_probe(struct platform_device *pdev)
 {
     int i=0, ret = 0;
-    dev_t dev;
-    struct my_struct *my;
+
 
     printk("hello_probe\n");
     //此目的應是將 driver 和 device 結合在一起
@@ -171,47 +231,24 @@ static int  hello_probe(struct platform_device *pdev)
     //注册的过程会通过probe来进行相应资源的申请，以及硬件的初始化，如果probe执行成功，则device和driver的绑定就成功了。
     //设备注册的时候同样会在总线上寻找相应的驱动，如果找到他也会试图绑定，绑定的过程同样是执行probe。
     
-    my = kmalloc(sizeof(*my), GFP_KERNEL);
-    if (!my)
-    {
-        printk("kmalloc failed\n");
-        return -ENOMEM;
-    }
-    platform_set_drvdata(pdev, my);
-    my->pdev = pdev;
 
-    ret = alloc_chrdev_region(&dev, 0, 1, "ExDev");
-    if(ret < 0)
-    {
-        printk("can't alloc chrdev\n");
-        return ret;
-    }
-    dev_major = MAJOR(dev);
-    dev_minor = MINOR(dev);
-    printk("register chrdev(%d,%d)\n",dev_major,dev_minor);
-
-    //my->mdev.name   = DeviceName;
-    //my->mdev.fops   = &devEx_fops;
-    cdev_init(&my->mdev, &devEx_fops);
-    my->mdev.owner = THIS_MODULE;
-    ret = cdev_add(&my->mdev, MKDEV(dev_major, dev_minor),1);
-    if(ret < 0){
+    if(add_chac_device(pdev) < 0){
         printk("add chr dev failed\n");
         return ret;
    }
 
-    for (i = 0; i < ARRAY_SIZE(hello_adv_group); i++) {
-        ret = device_create_file(&pdev->dev, hello_adv_group[i]);
-        if (ret) {
-            dev_err(&pdev->dev, "failed: sysfs file %s\n",
-                    hello_adv_group[i]->attr.name);
-        }else
-        {
-            printk("initial device_attribute\n");
-        }
-    }
+  for (i = 0; i < ARRAY_SIZE(hello_adv_group); i++) {
+      ret = device_create_file(&pdev->dev, hello_adv_group[i]);
+      if (ret) {
+          dev_err(&pdev->dev, "failed: sysfs file %s\n",
+                  hello_adv_group[i]->attr.name);
+      }else
+      {
+          printk("initial device_attribute\n");
+      }
+  }
     
-    return 0;
+  return 0;
 }
 
 static int __exit hello_remove(struct platform_device *pdev)
@@ -236,23 +273,8 @@ void hello_release(struct device *dev)
 {
     printk("hello release.\n");
 }
-/*
-struct resource hello_res[] = {
-    {
-        .name = "hello_res_name",
-        .start = 0x56000000,
-        .end = 0x57000000,
-        .flags = IORESOURCE_IO,
-    },
 
-    {
-        .start = IRQ_NONE,
-        .end = IRQ_NONE,
-        .flags = IORESOURCE_IRQ,
-    },
-};
-*/
-static struct platform_driver hello_driver = {
+static struct platform_driver exercise_driver = {
     .probe        = hello_probe,
     .remove        = __exit_p(hello_remove),
     .driver        = {
@@ -263,7 +285,7 @@ static struct platform_driver hello_driver = {
     .resume = hello_resume,
 };
 
-static struct platform_device hello_device = {
+static struct platform_device exercise_device = {
     .name = DeviceName,        //此name 需要 driver 和 device 相同
     .dev = {
         .release = hello_release, //.platform_data = &hello_data,
@@ -272,53 +294,34 @@ static struct platform_device hello_device = {
     //.resource = hello_res,   
 };
 
-EXPORT_SYMBOL_GPL(hello_device);
+EXPORT_SYMBOL_GPL(exercise_device);
 
 static int __init hello_init(void)
 {
     int ret = 0;
     //static struct *pdev;
 
-    ret = platform_device_register(&hello_device);  //內已有 platform_device_add
-/*    pdev = platform_device_alloc(DeviceName, 0);
-    if(pdev)
-        {printk("platform_device_alloc failed\n");}
-    else
-        {printk("platform_device alloc successful\n");}
-
-    if(ret = platform_device_add(pdev))
-    {
-        printk("platform_device_add failed\n");
-    }
-    else
-    {
-        printk("platform_device add successful\n");
-        printk("platform_device_register  \n");
-    }
-*/    
+    printk(KERN_ALERT "\n Hello, %s\n", whom);
+    ret = platform_device_register(&exercise_device);  //內已有 platform_device_add
+ 
     if (ret == 0) {
-        ret = platform_driver_register(&hello_driver);
+        ret = platform_driver_register(&exercise_driver);
         printk("platform_driver_register \n");
     }
-
-
-    
     return ret;
 }
 module_init(hello_init);
 
 static void __exit hello_exit(void)
 {
-
-
-    platform_driver_unregister(&hello_driver);
-    platform_device_unregister(&hello_device);
+    platform_driver_unregister(&exercise_driver);
+    platform_device_unregister(&exercise_device);
     printk("platform_device_unregister  \n");
 }
 module_exit(hello_exit);
 
 
-MODULE_AUTHOR("<guangyaw.twbbs.org>");
-MODULE_DESCRIPTION("hello driver");
+MODULE_AUTHOR("SamTsai");
+MODULE_DESCRIPTION("device driver exercise");
 MODULE_LICENSE("GPL");
 
