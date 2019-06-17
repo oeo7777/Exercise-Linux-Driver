@@ -144,7 +144,7 @@ static long devEx_ioctl(struct file *filp, unsigned int cmd, unsigned long args)
 //=================device attribute  ======================================
 static ssize_t hello_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
-    printk("hello_show \n");
+    printk("\n device_attribute say hello to u \n");
     
     return 0;
 }
@@ -153,14 +153,14 @@ static ssize_t hello_store(struct device *dev,
                                    struct device_attribute *attr,
                                    const char *buf, size_t size)
 {
-    printk("hello_store  \n");
+    printk("\n device_attribute store \n");
     return -1;
 }
 
 static struct device_attribute hello_adv_setting = {
     .attr = {
         .name = "hello_adv",
-        .mode = 0664,
+        .mode = 0666,
     },
     .show = hello_show,
     .store = hello_store,
